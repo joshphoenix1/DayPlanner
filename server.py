@@ -43,7 +43,7 @@ _WEATHER_TTL = 600  # seconds
 
 # Philosophy quote cache
 _quote_cache = {"data": None, "ts": 0}
-_QUOTE_TTL = 3600  # refresh every hour
+_QUOTE_TTL = 86400  # refresh once per day
 
 _TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 _TWITTER_USER_ID = "1434674691264942083"  # @PhilosophyDose_
