@@ -31,9 +31,11 @@ _quotes_cache = {"data": None, "ts": 0}
 _QUOTES_TTL = 120  # seconds
 _QUOTE_SYMBOLS = {"SPX": "^GSPC", "QQQ": "QQQ", "Gold": "GC=F", "BTC": "BTC-USD"}
 
-# Weather cache (keyed by location)
-_weather_cache = {"data": None, "ts": 0, "loc": None}
+# Windguru weather cache
+_weather_cache = {"data": None, "ts": 0}
 _WEATHER_TTL = 600  # seconds
+_WINDGURU_SPOT = 1317523
+_WINDGURU_MODEL = 3  # GFS 13km
 
 
 def fetch_quotes():
@@ -67,86 +69,166 @@ def fetch_quotes():
     return results
 
 
-def fetch_weather(location):
+def _wind_dir_label(deg):
+    """Convert wind direction degrees to 16-point compass label."""
+    dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+            "S","SSW","SW","WSW","W","WNW","NW","NNW"]
+    return dirs[round(deg / 22.5) % 16] if deg is not None else ""
+
+
+def _cloud_desc(cloud_pct):
+    """Convert cloud cover % to a short description."""
+    if cloud_pct is None:
+        return ""
+    if cloud_pct < 10:
+        return "Clear"
+    if cloud_pct < 30:
+        return "Mostly clear"
+    if cloud_pct < 60:
+        return "Partly cloudy"
+    if cloud_pct < 85:
+        return "Mostly cloudy"
+    return "Overcast"
+
+
+def fetch_weather():
     now = time.time()
-    if (_weather_cache["data"] and _weather_cache["loc"] == location
-            and now - _weather_cache["ts"] < _WEATHER_TTL):
+    if _weather_cache["data"] and now - _weather_cache["ts"] < _WEATHER_TTL:
         return _weather_cache["data"]
 
     try:
-        url = "https://wttr.in/{}?format=j1".format(urllib.parse.quote(location))
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
-        current = data["current_condition"][0]
+        # Fetch spot info for location name
+        spot_url = "https://www.windguru.cz/int/iapi.php?q=spot&id_spot={}".format(_WINDGURU_SPOT)
+        spot_req = urllib.request.Request(spot_url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.windguru.cz/{}".format(_WINDGURU_SPOT),
+        })
+        with urllib.request.urlopen(spot_req, timeout=8) as resp:
+            spot = json.loads(resp.read())
 
-        # Current conditions
-        from datetime import datetime as _dt
-        now_hour = _dt.now().hour
-        today_hourly = (data.get("weather", [{}])[0]).get("hourly", [])
-        rain_pct = None
-        for h in today_hourly:
-            h_time = int(h.get("time", "0")) // 100
-            if h_time >= now_hour:
-                rain_pct = h.get("chanceofrain", "0")
-                break
-        if rain_pct is None and today_hourly:
-            rain_pct = today_hourly[-1].get("chanceofrain", "0")
+        # Fetch GFS forecast
+        fcst_url = "https://www.windguru.cz/int/iapi.php?q=forecast&id_spot={}&id_model={}".format(
+            _WINDGURU_SPOT, _WINDGURU_MODEL
+        )
+        fcst_req = urllib.request.Request(fcst_url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.windguru.cz/{}".format(_WINDGURU_SPOT),
+        })
+        with urllib.request.urlopen(fcst_req, timeout=10) as resp:
+            fcst_data = json.loads(resp.read())
+
+        fcst = fcst_data.get("fcst", {})
+        initstamp = fcst.get("initstamp", 0)
+        hours = fcst.get("hours", [])
+        temps = fcst.get("TMPE", [])
+        winds = fcst.get("WINDSPD", [])
+        gusts = fcst.get("GUST", [])
+        rain = fcst.get("PCPT", [])
+        rh = fcst.get("RH", [])
+        wdir = fcst.get("WINDDIR", [])
+        cloud = fcst.get("TCDC", [])
+
+        # Get timezone offset from spot info
+        tz_offset = spot.get("gmt_hour_offset", 0) * 3600
+
+        # Build hourly timestamps and group by local date
+        from collections import defaultdict
+        daily = defaultdict(lambda: {"temps": [], "winds": [], "gusts": [], "rain": [],
+                                      "rh": [], "wdir": [], "cloud": [], "hours_local": []})
+
+        for i, hr in enumerate(hours):
+            ts = initstamp + hr * 3600
+            local_ts = ts + tz_offset
+            # Compute local date string
+            d = datetime.utcfromtimestamp(local_ts)
+            date_str = d.strftime("%Y-%m-%d")
+            local_hour = d.hour
+
+            entry = daily[date_str]
+            entry["hours_local"].append(local_hour)
+            if i < len(temps) and temps[i] is not None:
+                entry["temps"].append(temps[i])
+            if i < len(winds) and winds[i] is not None:
+                entry["winds"].append(winds[i])
+            if i < len(gusts) and gusts[i] is not None:
+                entry["gusts"].append(gusts[i])
+            if i < len(rain) and rain[i] is not None:
+                entry["rain"].append(rain[i])
+            if i < len(rh) and rh[i] is not None:
+                entry["rh"].append(rh[i])
+            if i < len(wdir) and wdir[i] is not None:
+                entry["wdir"].append(wdir[i])
+            if i < len(cloud) and cloud[i] is not None:
+                entry["cloud"].append(cloud[i])
+
+        # Find current conditions (nearest hour to now)
+        now_ts = time.time()
+        best_i = 0
+        best_diff = abs((initstamp + hours[0] * 3600) - now_ts) if hours else 999999
+        for i, hr in enumerate(hours):
+            diff = abs((initstamp + hr * 3600) - now_ts)
+            if diff < best_diff:
+                best_diff = diff
+                best_i = i
+
+        cur_temp = temps[best_i] if best_i < len(temps) else None
+        cur_wind = winds[best_i] if best_i < len(winds) else None
+        cur_gust = gusts[best_i] if best_i < len(gusts) else None
+        cur_rh = rh[best_i] if best_i < len(rh) else None
+        cur_wdir = wdir[best_i] if best_i < len(wdir) else None
+        cur_cloud = cloud[best_i] if best_i < len(cloud) else None
+        cur_rain = rain[best_i] if best_i < len(rain) else None
 
         result = {
-            "location": data.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", location),
+            "location": "Auckland",
             "current": {
-                "temp_c": current.get("temp_C"),
-                "feels_like_c": current.get("FeelsLikeC"),
-                "desc": current.get("weatherDesc", [{}])[0].get("value", ""),
-                "humidity": current.get("humidity"),
-                "wind_kmh": current.get("windspeedKmph"),
-                "wind_dir": current.get("winddir16Point"),
-                "rain_pct": rain_pct,
-                "uv": current.get("uvIndex"),
+                "temp_c": str(round(cur_temp)) if cur_temp is not None else None,
+                "wind_kmh": str(round(cur_wind)) if cur_wind is not None else None,
+                "gust_kmh": str(round(cur_gust)) if cur_gust is not None else None,
+                "wind_dir": _wind_dir_label(cur_wdir),
+                "humidity": str(round(cur_rh)) if cur_rh is not None else None,
+                "rain_mm": str(round(cur_rain, 1)) if cur_rain is not None else None,
+                "cloud_pct": str(round(cur_cloud)) if cur_cloud is not None else None,
+                "desc": _cloud_desc(cur_cloud),
             },
             "days": {},
         }
 
-        # Build per-day forecasts keyed by date string
-        for day in data.get("weather", []):
-            date_str = day.get("date", "")
-            if not date_str:
-                continue
-            # Get midday hour for description, avg rain, wind
-            hourly = day.get("hourly", [])
-            mid_desc = ""
-            mid_wind = ""
-            mid_wind_dir = ""
-            mid_humidity = ""
-            avg_rain = 0
-            for h in hourly:
-                rain_val = int(h.get("chanceofrain", "0"))
-                if rain_val > avg_rain:
-                    avg_rain = rain_val
-                if int(h.get("time", "0")) // 100 == 12:
-                    mid_desc = h.get("weatherDesc", [{}])[0].get("value", "")
-                    mid_wind = h.get("windspeedKmph", "")
-                    mid_wind_dir = h.get("winddir16Point", "")
-                    mid_humidity = h.get("humidity", "")
+        # Build daily summaries
+        for date_str, d in sorted(daily.items()):
+            t = d["temps"]
+            w = d["winds"]
+            g = d["gusts"]
+            r = d["rain"]
+            h = d["rh"]
+            wd = d["wdir"]
+            c = d["cloud"]
+            # Find midday values (closest to 12-14h range)
+            mid_idx = None
+            for idx, lh in enumerate(d["hours_local"]):
+                if 11 <= lh <= 14:
+                    mid_idx = idx
+                    break
 
             result["days"][date_str] = {
-                "high": day.get("maxtempC"),
-                "low": day.get("mintempC"),
-                "desc": mid_desc,
-                "rain_pct": str(avg_rain),
-                "wind_kmh": mid_wind,
-                "wind_dir": mid_wind_dir,
-                "humidity": mid_humidity,
+                "high": str(round(max(t))) if t else None,
+                "low": str(round(min(t))) if t else None,
+                "wind_kmh": str(round(w[mid_idx] if mid_idx is not None and mid_idx < len(w) else (sum(w)/len(w) if w else 0))),
+                "gust_kmh": str(round(max(g))) if g else None,
+                "wind_dir": _wind_dir_label(wd[mid_idx] if mid_idx is not None and mid_idx < len(wd) else (wd[0] if wd else None)),
+                "rain_mm": str(round(sum(r), 1)) if r else "0",
+                "humidity": str(round(sum(h)/len(h))) if h else None,
+                "desc": _cloud_desc(c[mid_idx] if mid_idx is not None and mid_idx < len(c) else (sum(c)/len(c) if c else None)),
             }
 
         _weather_cache["data"] = result
         _weather_cache["ts"] = now
-        _weather_cache["loc"] = location
         return result
     except Exception as e:
-        print(f"[Weather] Failed to fetch for {location}: {e}")
-        return {"location": location, "temp_c": None, "desc": "Unavailable"}
+        print(f"[Weather] Failed to fetch from Windguru: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"location": "Auckland", "current": {"temp_c": None, "desc": "Unavailable"}, "days": {}}
 
 # Track sent reminders: set of "YYYY-MM-DD-HH"
 sent_reminders = set()
@@ -243,14 +325,7 @@ class DayPlannerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _get_weather(self):
-        # Parse ?location=... query param
-        loc = "Auckland"
-        if "?" in self.path:
-            qs = self.path.split("?", 1)[1]
-            for param in qs.split("&"):
-                if param.startswith("location="):
-                    loc = urllib.parse.unquote(param.split("=", 1)[1])
-        weather = fetch_weather(loc)
+        weather = fetch_weather()
         body = json.dumps(weather).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

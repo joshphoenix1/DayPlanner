@@ -976,27 +976,6 @@ body[data-theme="tron"]::before {
   setInterval(updateTimeIndicator, 60000);
 
   // ── Market data & weather tiles ───────────────────────────────
-  let weatherLocation = "";
-
-  // Auto-detect location via browser geolocation
-  function initLocation() {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        function(pos) {
-          weatherLocation = pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4);
-          loadInfoBar();
-        },
-        function() {
-          weatherLocation = "Auckland";
-          loadInfoBar();
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      weatherLocation = "Auckland";
-      loadInfoBar();
-    }
-  }
 
   async function loadTickers() {
     const bar = document.getElementById("infoBar");
@@ -1044,7 +1023,7 @@ body[data-theme="tron"]::before {
 
   async function fetchWeather() {
     try {
-      const res = await fetch("/api/weather?location=" + encodeURIComponent(weatherLocation));
+      const res = await fetch("/api/weather");
       if (res.ok) cachedWeather = await res.json();
     } catch (e) {}
     renderWeatherTile();
@@ -1066,7 +1045,7 @@ body[data-theme="tron"]::before {
     header.className = "weather-header";
     const wLoc = document.createElement("span");
     wLoc.className = "weather-loc";
-    wLoc.textContent = w.location || weatherLocation;
+    wLoc.textContent = w.location || "";
     header.appendChild(wLoc);
 
     // Determine if viewing today or a forecast day
@@ -1085,12 +1064,6 @@ body[data-theme="tron"]::before {
       wTemp.className = "weather-temp";
       wTemp.textContent = c.temp_c !== null ? c.temp_c + "\u00B0C" : "\u2014";
       main.appendChild(wTemp);
-      if (c.feels_like_c) {
-        const feels = document.createElement("span");
-        feels.className = "weather-feels";
-        feels.textContent = "Feels " + c.feels_like_c + "\u00B0";
-        main.appendChild(feels);
-      }
       wTile.appendChild(header);
       wTile.appendChild(main);
 
@@ -1104,11 +1077,14 @@ body[data-theme="tron"]::before {
       if (dayForecast && dayForecast.high && dayForecast.low) {
         details.innerHTML += '<span class="weather-detail"><b>' + dayForecast.high + '\u00B0</b>/' + dayForecast.low + '\u00B0</span>';
       }
-      if (c.rain_pct !== null && c.rain_pct !== undefined) {
-        details.innerHTML += '<span class="weather-detail">Rain <b>' + c.rain_pct + '%</b></span>';
+      if (c.rain_mm && c.rain_mm !== "0" && c.rain_mm !== "0.0") {
+        details.innerHTML += '<span class="weather-detail">Rain <b>' + c.rain_mm + '</b>mm</span>';
       }
       if (c.wind_kmh) {
-        details.innerHTML += '<span class="weather-detail">Wind <b>' + c.wind_kmh + '</b>km/h ' + (c.wind_dir || '') + '</span>';
+        let windTxt = 'Wind <b>' + c.wind_kmh + '</b>';
+        if (c.gust_kmh) windTxt += '(G' + c.gust_kmh + ')';
+        windTxt += 'km/h ' + (c.wind_dir || '');
+        details.innerHTML += '<span class="weather-detail">' + windTxt + '</span>';
       }
       if (c.humidity) {
         details.innerHTML += '<span class="weather-detail">Hum <b>' + c.humidity + '%</b></span>';
@@ -1150,11 +1126,14 @@ body[data-theme="tron"]::before {
 
       const details = document.createElement("div");
       details.className = "weather-details";
-      if (dayForecast.rain_pct) {
-        details.innerHTML += '<span class="weather-detail">Rain <b>' + dayForecast.rain_pct + '%</b></span>';
+      if (dayForecast.rain_mm && dayForecast.rain_mm !== "0" && dayForecast.rain_mm !== "0.0") {
+        details.innerHTML += '<span class="weather-detail">Rain <b>' + dayForecast.rain_mm + '</b>mm</span>';
       }
       if (dayForecast.wind_kmh) {
-        details.innerHTML += '<span class="weather-detail">Wind <b>' + dayForecast.wind_kmh + '</b>km/h ' + (dayForecast.wind_dir || '') + '</span>';
+        let windTxt = 'Wind <b>' + dayForecast.wind_kmh + '</b>';
+        if (dayForecast.gust_kmh) windTxt += '(G' + dayForecast.gust_kmh + ')';
+        windTxt += 'km/h ' + (dayForecast.wind_dir || '');
+        details.innerHTML += '<span class="weather-detail">' + windTxt + '</span>';
       }
       if (dayForecast.humidity) {
         details.innerHTML += '<span class="weather-detail">Hum <b>' + dayForecast.humidity + '%</b></span>';
@@ -1181,7 +1160,7 @@ body[data-theme="tron"]::before {
     await Promise.all([loadTickers(), loadWeather()]);
   }
 
-  initLocation();
+  loadInfoBar();
   setInterval(loadTickers, 5000);
   setInterval(loadWeather, 600000);
 
