@@ -427,28 +427,8 @@ body {
   const END_HOUR = 23;
   const STORAGE_PREFIX = "dayplanner_";
 
-  // One-time migration: shift all entries forward one day
-  if (!localStorage.getItem("dayplanner_migrated_fwd1")) {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k.startsWith(STORAGE_PREFIX) && k !== "dayplanner_migrated_fwd1") keys.push(k);
-    }
-    const entries = keys.map(k => ({ key: k, val: localStorage.getItem(k) }));
-    keys.forEach(k => localStorage.removeItem(k));
-    entries.forEach(({ key, val }) => {
-      const dateStr = key.replace(STORAGE_PREFIX, "");
-      const parts = dateStr.split("-");
-      const d = new Date(+parts[0], +parts[1] - 1, +parts[2] + 1);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      localStorage.setItem(STORAGE_PREFIX + `${y}-${m}-${day}`, val);
-    });
-    localStorage.setItem("dayplanner_migrated_fwd1", "1");
-  }
-
   let currentDate = new Date();
+  let currentTasks = {};
   let editingHour = null;
   let selectedColor = "blue";
   let dragSourceHour = null;
@@ -469,23 +449,25 @@ body {
     return `${y}-${m}-${day}`;
   }
 
-  function storageKey(d) {
-    return STORAGE_PREFIX + dateKey(d);
-  }
-
-  function loadTasks(d) {
+  async function loadTasks(d) {
     try {
-      return JSON.parse(localStorage.getItem(storageKey(d))) || {};
+      const res = await fetch("/api/tasks/" + dateKey(d));
+      if (!res.ok) return {};
+      return await res.json();
     } catch {
       return {};
     }
   }
 
-  function saveTasks(d, tasks) {
-    if (Object.keys(tasks).length === 0) {
-      localStorage.removeItem(storageKey(d));
-    } else {
-      localStorage.setItem(storageKey(d), JSON.stringify(tasks));
+  async function saveTasks(d, tasks) {
+    try {
+      await fetch("/api/tasks/" + dateKey(d), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tasks)
+      });
+    } catch (e) {
+      console.error("Failed to save tasks:", e);
     }
   }
 
@@ -510,9 +492,9 @@ body {
   }
 
   // Render
-  function render() {
+  async function render() {
     dateDisplayEl.textContent = formatDate(currentDate);
-    const tasks = loadTasks(currentDate);
+    currentTasks = await loadTasks(currentDate);
 
     scheduleEl.innerHTML = "";
 
@@ -528,7 +510,7 @@ body {
       const area = document.createElement("div");
       area.className = "task-area";
 
-      const task = tasks[h];
+      const task = currentTasks[h];
       if (task) {
         const card = document.createElement("div");
         card.className = `task-card color-${task.color || "blue"}`;
@@ -632,34 +614,30 @@ body {
   }
 
   // Task operations
-  function moveTask(fromHour, toHour) {
-    const tasks = loadTasks(currentDate);
-    if (!tasks[fromHour]) return;
-    // Swap if target has a task, otherwise just move
-    const fromTask = tasks[fromHour];
-    const toTask = tasks[toHour];
+  async function moveTask(fromHour, toHour) {
+    if (!currentTasks[fromHour]) return;
+    const fromTask = currentTasks[fromHour];
+    const toTask = currentTasks[toHour];
     if (toTask) {
-      tasks[fromHour] = toTask;
-      tasks[toHour] = fromTask;
+      currentTasks[fromHour] = toTask;
+      currentTasks[toHour] = fromTask;
     } else {
-      delete tasks[fromHour];
-      tasks[toHour] = fromTask;
+      delete currentTasks[fromHour];
+      currentTasks[toHour] = fromTask;
     }
-    saveTasks(currentDate, tasks);
-    render();
+    await saveTasks(currentDate, currentTasks);
+    await render();
   }
 
-  function deleteTask(hour) {
-    const tasks = loadTasks(currentDate);
-    delete tasks[hour];
-    saveTasks(currentDate, tasks);
-    render();
+  async function deleteTask(hour) {
+    delete currentTasks[hour];
+    await saveTasks(currentDate, currentTasks);
+    await render();
   }
 
-  function openModal(hour) {
+  async function openModal(hour) {
     editingHour = hour;
-    const tasks = loadTasks(currentDate);
-    const existing = tasks[hour];
+    const existing = currentTasks[hour];
 
     if (existing) {
       modalTitle.textContent = "Edit Task — " + formatHour(hour);
@@ -681,18 +659,17 @@ body {
     editingHour = null;
   }
 
-  function saveTask() {
+  async function saveTask() {
     const text = taskInput.value.trim();
     if (!text) {
       closeModal();
       return;
     }
 
-    const tasks = loadTasks(currentDate);
-    tasks[editingHour] = { text, color: selectedColor };
-    saveTasks(currentDate, tasks);
+    currentTasks[editingHour] = { text, color: selectedColor };
+    await saveTasks(currentDate, currentTasks);
     closeModal();
-    render();
+    await render();
   }
 
   function updateColorSelection() {
@@ -740,8 +717,38 @@ body {
   // Update time indicator every minute
   setInterval(updateTimeIndicator, 60000);
 
+  // One-time migration: move localStorage data to server, then clean up
+  async function migrateLocalStorage() {
+    if (localStorage.getItem("dayplanner_migrated_to_server")) return;
+
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(STORAGE_PREFIX) && !k.includes("migrated")) keys.push(k);
+    }
+
+    for (const k of keys) {
+      const dateStr = k.replace(STORAGE_PREFIX, "");
+      try {
+        const tasks = JSON.parse(localStorage.getItem(k));
+        if (tasks && Object.keys(tasks).length > 0) {
+          await fetch("/api/tasks/" + dateStr, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tasks)
+          });
+        }
+      } catch {}
+    }
+
+    // Clean up localStorage
+    keys.forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem("dayplanner_migrated_fwd1");
+    localStorage.setItem("dayplanner_migrated_to_server", "1");
+  }
+
   // Init
-  render();
+  migrateLocalStorage().then(() => render());
 })();
 </script>
 </body>
