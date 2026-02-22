@@ -314,6 +314,16 @@ body[data-theme="tron"]::before {
   flex: 1;
 }
 
+.task-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.task-link:hover {
+  color: var(--accent-hover);
+}
+
 .task-delete {
   background: none;
   border: none;
@@ -899,6 +909,11 @@ body[data-theme="tron"]::before {
     return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   }
 
+  function linkify(str) {
+    var escaped = str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" class="task-link">$1</a>');
+  }
+
   function isToday(d) {
     const now = new Date();
     return d.getFullYear() === now.getFullYear() &&
@@ -947,7 +962,10 @@ body[data-theme="tron"]::before {
 
         const text = document.createElement("span");
         text.className = "task-text";
-        text.textContent = task.text;
+        text.innerHTML = linkify(task.text);
+        text.querySelectorAll("a").forEach(function(a) {
+          a.addEventListener("click", function(e) { e.stopPropagation(); });
+        });
 
         const del = document.createElement("button");
         del.className = "task-delete";
@@ -1332,7 +1350,7 @@ body[data-theme="tron"]::before {
   }
 
   loadQuote();
-  setInterval(loadQuote, 86400000);
+  setInterval(loadQuote, 300000);
 
   loadInfoBar();
   setInterval(loadTickers, 5000);

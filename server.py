@@ -41,23 +41,19 @@ _QUOTE_SYMBOLS = {"SPX": "^GSPC", "QQQ": "QQQ", "Gold": "GC=F", "BTC": "BTC-USD"
 _weather_cache = {"data": None, "ts": 0}
 _WEATHER_TTL = 600  # seconds
 
-# Philosophy quote cache
-_quote_cache = {"data": None, "ts": 0}
-_QUOTE_TTL = 86400  # refresh once per day
+# Philosophy quote cache — stores list of tweets, rotates through them
+_quote_cache = {"quotes": [], "ts": 0, "index": 0}
+_QUOTE_TTL = 86400  # re-fetch tweets once per day
 
 _TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 _TWITTER_USER_ID = "1434674691264942083"  # @PhilosophyDose_
 
 
-def fetch_quote():
+def _refresh_quotes():
+    """Fetch tweets from @PhilosophyDose_ and cache them all."""
     import re
     import subprocess
-    now = time.time()
-    if _quote_cache["data"] and now - _quote_cache["ts"] < _QUOTE_TTL:
-        return _quote_cache["data"]
-
     try:
-        # Get guest token via curl
         gt_result = subprocess.run(
             ["curl", "-s", "-X", "POST",
              "https://api.twitter.com/1.1/guest/activate.json",
@@ -68,10 +64,9 @@ def fetch_quote():
         if not guest_token:
             raise Exception("No guest token")
 
-        # Fetch user tweets via GraphQL using curl
         variables = json.dumps({
             "userId": _TWITTER_USER_ID,
-            "count": 10,
+            "count": 20,
             "includePromotedContent": False,
             "withQuickPromoteEligibilityTweetFields": False,
             "withVoice": False,
@@ -111,7 +106,7 @@ def fetch_quote():
         )
         data = json.loads(tw_result.stdout)
 
-        # Extract the most recent original tweet text
+        tweets = []
         instructions = (data.get("data", {}).get("user", {}).get("result", {})
                         .get("timeline_v2", {}).get("timeline", {}).get("instructions", []))
         for inst in instructions:
@@ -120,19 +115,37 @@ def fetch_quote():
                           .get("tweet_results", {}).get("result", {}))
                 legacy = result.get("legacy", {})
                 text = legacy.get("full_text", "")
-                # Skip retweets and replies
                 if text and not text.startswith("RT @") and not text.startswith("@"):
-                    # Clean up t.co links
                     text = re.sub(r'https://t\.co/\S+', '', text).strip()
-                    result_data = {"text": text}
-                    _quote_cache["data"] = result_data
-                    _quote_cache["ts"] = now
-                    return result_data
+                    if text:
+                        tweets.append(text)
 
-        raise Exception("No tweets found")
+        if not tweets:
+            raise Exception("No tweets found")
+
+        _quote_cache["quotes"] = tweets
+        _quote_cache["ts"] = time.time()
+        _quote_cache["index"] = 0
+        print(f"[Quote] Cached {len(tweets)} tweets")
     except Exception as e:
         print(f"[Quote] Failed to fetch: {e}")
-        return _quote_cache.get("data") or {"text": ""}
+
+
+def fetch_quote():
+    now = time.time()
+    # Re-fetch tweets if cache is stale
+    if not _quote_cache["quotes"] or now - _quote_cache["ts"] >= _QUOTE_TTL:
+        _refresh_quotes()
+
+    quotes = _quote_cache["quotes"]
+    if not quotes:
+        return {"text": ""}
+
+    # Return current quote and advance index for next call
+    idx = _quote_cache["index"] % len(quotes)
+    text = quotes[idx]
+    _quote_cache["index"] = idx + 1
+    return {"text": text}
 _WINDGURU_SPOT = 1317523
 _WINDGURU_MODEL = 3  # GFS 13km
 
