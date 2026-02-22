@@ -79,44 +79,66 @@ def fetch_weather(location):
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
         current = data["current_condition"][0]
-        today = data.get("weather", [{}])[0]
-        tomorrow = data.get("weather", [{}, {}])[1] if len(data.get("weather", [])) > 1 else {}
 
-        # Find current/upcoming hours rain chance
-        hourly = today.get("hourly", [])
+        # Current conditions
         from datetime import datetime as _dt
         now_hour = _dt.now().hour
+        today_hourly = (data.get("weather", [{}])[0]).get("hourly", [])
         rain_pct = None
-        for h in hourly:
+        for h in today_hourly:
             h_time = int(h.get("time", "0")) // 100
             if h_time >= now_hour:
                 rain_pct = h.get("chanceofrain", "0")
                 break
-        if rain_pct is None and hourly:
-            rain_pct = hourly[-1].get("chanceofrain", "0")
+        if rain_pct is None and today_hourly:
+            rain_pct = today_hourly[-1].get("chanceofrain", "0")
 
         result = {
             "location": data.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", location),
-            "temp_c": current.get("temp_C"),
-            "feels_like_c": current.get("FeelsLikeC"),
-            "desc": current.get("weatherDesc", [{}])[0].get("value", ""),
-            "humidity": current.get("humidity"),
-            "wind_kmh": current.get("windspeedKmph"),
-            "wind_dir": current.get("winddir16Point"),
-            "rain_pct": rain_pct,
-            "uv": current.get("uvIndex"),
-            "today_high": today.get("maxtempC"),
-            "today_low": today.get("mintempC"),
-            "tomorrow_high": tomorrow.get("maxtempC"),
-            "tomorrow_low": tomorrow.get("mintempC"),
-            "tomorrow_desc": "",
+            "current": {
+                "temp_c": current.get("temp_C"),
+                "feels_like_c": current.get("FeelsLikeC"),
+                "desc": current.get("weatherDesc", [{}])[0].get("value", ""),
+                "humidity": current.get("humidity"),
+                "wind_kmh": current.get("windspeedKmph"),
+                "wind_dir": current.get("winddir16Point"),
+                "rain_pct": rain_pct,
+                "uv": current.get("uvIndex"),
+            },
+            "days": {},
         }
-        # Get tomorrow's general description from midday hour
-        tmrw_hourly = tomorrow.get("hourly", [])
-        for h in tmrw_hourly:
-            if int(h.get("time", "0")) // 100 == 12:
-                result["tomorrow_desc"] = h.get("weatherDesc", [{}])[0].get("value", "")
-                break
+
+        # Build per-day forecasts keyed by date string
+        for day in data.get("weather", []):
+            date_str = day.get("date", "")
+            if not date_str:
+                continue
+            # Get midday hour for description, avg rain, wind
+            hourly = day.get("hourly", [])
+            mid_desc = ""
+            mid_wind = ""
+            mid_wind_dir = ""
+            mid_humidity = ""
+            avg_rain = 0
+            for h in hourly:
+                rain_val = int(h.get("chanceofrain", "0"))
+                if rain_val > avg_rain:
+                    avg_rain = rain_val
+                if int(h.get("time", "0")) // 100 == 12:
+                    mid_desc = h.get("weatherDesc", [{}])[0].get("value", "")
+                    mid_wind = h.get("windspeedKmph", "")
+                    mid_wind_dir = h.get("winddir16Point", "")
+                    mid_humidity = h.get("humidity", "")
+
+            result["days"][date_str] = {
+                "high": day.get("maxtempC"),
+                "low": day.get("mintempC"),
+                "desc": mid_desc,
+                "rain_pct": str(avg_rain),
+                "wind_kmh": mid_wind,
+                "wind_dir": mid_wind_dir,
+                "humidity": mid_humidity,
+            }
 
         _weather_cache["data"] = result
         _weather_cache["ts"] = now

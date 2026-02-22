@@ -841,6 +841,7 @@ body[data-theme="tron"]::before {
     }
 
     updateTimeIndicator();
+    if (cachedWeather) renderWeatherTile();
   }
 
   function updateTimeIndicator() {
@@ -1039,19 +1040,24 @@ body[data-theme="tron"]::before {
     }
   }
 
-  async function loadWeather() {
+  let cachedWeather = null;
+
+  async function fetchWeather() {
+    try {
+      const res = await fetch("/api/weather?location=" + encodeURIComponent(weatherLocation));
+      if (res.ok) cachedWeather = await res.json();
+    } catch (e) {}
+    renderWeatherTile();
+  }
+
+  function renderWeatherTile() {
     const bar = document.getElementById("infoBar");
-    // Remove old weather tile
     const old = bar.querySelector(".weather-tile");
     if (old) old.remove();
 
-    let weather = null;
-    try {
-      const res = await fetch("/api/weather?location=" + encodeURIComponent(weatherLocation));
-      if (res.ok) weather = await res.json();
-    } catch (e) {}
+    const w = cachedWeather;
+    if (!w) return;
 
-    const w = weather;
     const wTile = document.createElement("div");
     wTile.className = "weather-tile";
 
@@ -1060,61 +1066,115 @@ body[data-theme="tron"]::before {
     header.className = "weather-header";
     const wLoc = document.createElement("span");
     wLoc.className = "weather-loc";
-    wLoc.textContent = w ? w.location : weatherLocation;
+    wLoc.textContent = w.location || weatherLocation;
     header.appendChild(wLoc);
 
-    // Main: temp + feels like + desc
-    const main = document.createElement("div");
-    main.className = "weather-main";
-    const wTemp = document.createElement("span");
-    wTemp.className = "weather-temp";
-    wTemp.textContent = w && w.temp_c !== null ? w.temp_c + "\u00B0C" : "\u2014";
-    main.appendChild(wTemp);
+    // Determine if viewing today or a forecast day
+    const selectedKey = dateKey(currentDate);
+    const todayKey = dateKey(new Date());
+    const viewingToday = selectedKey === todayKey;
+    const dayForecast = w.days ? w.days[selectedKey] : null;
 
-    if (w && w.feels_like_c) {
-      const feels = document.createElement("span");
-      feels.className = "weather-feels";
-      feels.textContent = "Feels " + w.feels_like_c + "\u00B0";
-      main.appendChild(feels);
+    if (viewingToday && w.current) {
+      // Current live conditions
+      const c = w.current;
+
+      const main = document.createElement("div");
+      main.className = "weather-main";
+      const wTemp = document.createElement("span");
+      wTemp.className = "weather-temp";
+      wTemp.textContent = c.temp_c !== null ? c.temp_c + "\u00B0C" : "\u2014";
+      main.appendChild(wTemp);
+      if (c.feels_like_c) {
+        const feels = document.createElement("span");
+        feels.className = "weather-feels";
+        feels.textContent = "Feels " + c.feels_like_c + "\u00B0";
+        main.appendChild(feels);
+      }
+      wTile.appendChild(header);
+      wTile.appendChild(main);
+
+      const desc = document.createElement("span");
+      desc.className = "weather-desc";
+      desc.textContent = c.desc || "";
+      wTile.appendChild(desc);
+
+      const details = document.createElement("div");
+      details.className = "weather-details";
+      if (dayForecast && dayForecast.high && dayForecast.low) {
+        details.innerHTML += '<span class="weather-detail"><b>' + dayForecast.high + '\u00B0</b>/' + dayForecast.low + '\u00B0</span>';
+      }
+      if (c.rain_pct !== null && c.rain_pct !== undefined) {
+        details.innerHTML += '<span class="weather-detail">Rain <b>' + c.rain_pct + '%</b></span>';
+      }
+      if (c.wind_kmh) {
+        details.innerHTML += '<span class="weather-detail">Wind <b>' + c.wind_kmh + '</b>km/h ' + (c.wind_dir || '') + '</span>';
+      }
+      if (c.humidity) {
+        details.innerHTML += '<span class="weather-detail">Hum <b>' + c.humidity + '%</b></span>';
+      }
+      wTile.appendChild(details);
+
+      // Show next day forecast if available
+      const tmrwKey = dateKey(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1));
+      const tmrw = w.days ? w.days[tmrwKey] : null;
+      if (tmrw && tmrw.high && tmrw.low) {
+        const forecast = document.createElement("div");
+        forecast.className = "weather-forecast";
+        let txt = "Tomorrow: <b>" + tmrw.high + "\u00B0</b>/" + tmrw.low + "\u00B0";
+        if (tmrw.desc) txt += " \u2014 " + tmrw.desc;
+        forecast.innerHTML = txt;
+        wTile.appendChild(forecast);
+      }
+
+    } else if (dayForecast) {
+      // Forecast day view
+      wTile.appendChild(header);
+
+      const main = document.createElement("div");
+      main.className = "weather-main";
+      const wTemp = document.createElement("span");
+      wTemp.className = "weather-temp";
+      wTemp.textContent = dayForecast.high + "\u00B0 / " + dayForecast.low + "\u00B0";
+      main.appendChild(wTemp);
+      const label = document.createElement("span");
+      label.className = "weather-feels";
+      label.textContent = "Forecast";
+      main.appendChild(label);
+      wTile.appendChild(main);
+
+      const desc = document.createElement("span");
+      desc.className = "weather-desc";
+      desc.textContent = dayForecast.desc || "";
+      wTile.appendChild(desc);
+
+      const details = document.createElement("div");
+      details.className = "weather-details";
+      if (dayForecast.rain_pct) {
+        details.innerHTML += '<span class="weather-detail">Rain <b>' + dayForecast.rain_pct + '%</b></span>';
+      }
+      if (dayForecast.wind_kmh) {
+        details.innerHTML += '<span class="weather-detail">Wind <b>' + dayForecast.wind_kmh + '</b>km/h ' + (dayForecast.wind_dir || '') + '</span>';
+      }
+      if (dayForecast.humidity) {
+        details.innerHTML += '<span class="weather-detail">Hum <b>' + dayForecast.humidity + '%</b></span>';
+      }
+      wTile.appendChild(details);
+
+    } else {
+      // Out of forecast range
+      wTile.appendChild(header);
+      const noData = document.createElement("span");
+      noData.className = "weather-desc";
+      noData.textContent = "No forecast available";
+      wTile.appendChild(noData);
     }
 
-    const desc = document.createElement("span");
-    desc.className = "weather-desc";
-    desc.textContent = w ? w.desc : "";
-
-    // Details row: H/L, Rain, Wind, Humidity
-    const details = document.createElement("div");
-    details.className = "weather-details";
-    if (w) {
-      if (w.today_high && w.today_low) {
-        details.innerHTML += '<span class="weather-detail"><b>' + w.today_high + '\u00B0</b>/' + w.today_low + '\u00B0</span>';
-      }
-      if (w.rain_pct !== null && w.rain_pct !== undefined) {
-        details.innerHTML += '<span class="weather-detail">Rain <b>' + w.rain_pct + '%</b></span>';
-      }
-      if (w.wind_kmh) {
-        details.innerHTML += '<span class="weather-detail">Wind <b>' + w.wind_kmh + '</b>km/h ' + (w.wind_dir || '') + '</span>';
-      }
-      if (w.humidity) {
-        details.innerHTML += '<span class="weather-detail">Hum <b>' + w.humidity + '%</b></span>';
-      }
-    }
-
-    // Tomorrow forecast
-    const forecast = document.createElement("div");
-    forecast.className = "weather-forecast";
-    if (w && w.tomorrow_high && w.tomorrow_low) {
-      let txt = "Tomorrow: <b>" + w.tomorrow_high + "\u00B0</b>/" + w.tomorrow_low + "\u00B0";
-      if (w.tomorrow_desc) txt += " \u2014 " + w.tomorrow_desc;
-      forecast.innerHTML = txt;
-    }
-
-    wTile.appendChild(header);
-    wTile.appendChild(main);
-    wTile.appendChild(desc);
-    wTile.appendChild(details);
-    if (forecast.innerHTML) wTile.appendChild(forecast);
     bar.appendChild(wTile);
+  }
+
+  async function loadWeather() {
+    await fetchWeather();
   }
 
   async function loadInfoBar() {
