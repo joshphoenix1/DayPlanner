@@ -320,6 +320,24 @@ body {
   background: #3a3a5a;
 }
 
+/* Drag and drop */
+.task-card[draggable="true"] {
+  cursor: grab;
+}
+
+.task-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.time-slot.drag-over {
+  background: #1f2f54;
+  box-shadow: inset 0 0 0 2px #4361ee;
+}
+
+.time-slot.drag-source {
+  opacity: 0.4;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .container {
@@ -409,9 +427,31 @@ body {
   const END_HOUR = 23;
   const STORAGE_PREFIX = "dayplanner_";
 
+  // One-time migration: shift all entries forward one day
+  if (!localStorage.getItem("dayplanner_migrated_fwd1")) {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(STORAGE_PREFIX) && k !== "dayplanner_migrated_fwd1") keys.push(k);
+    }
+    const entries = keys.map(k => ({ key: k, val: localStorage.getItem(k) }));
+    keys.forEach(k => localStorage.removeItem(k));
+    entries.forEach(({ key, val }) => {
+      const dateStr = key.replace(STORAGE_PREFIX, "");
+      const parts = dateStr.split("-");
+      const d = new Date(+parts[0], +parts[1] - 1, +parts[2] + 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      localStorage.setItem(STORAGE_PREFIX + `${y}-${m}-${day}`, val);
+    });
+    localStorage.setItem("dayplanner_migrated_fwd1", "1");
+  }
+
   let currentDate = new Date();
   let editingHour = null;
   let selectedColor = "blue";
+  let dragSourceHour = null;
 
   // Elements
   const scheduleEl = document.getElementById("schedule");
@@ -492,6 +532,21 @@ body {
       if (task) {
         const card = document.createElement("div");
         card.className = `task-card color-${task.color || "blue"}`;
+        card.draggable = true;
+
+        card.addEventListener("dragstart", function(e) {
+          dragSourceHour = h;
+          slot.classList.add("drag-source");
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(h));
+        });
+
+        card.addEventListener("dragend", function() {
+          dragSourceHour = null;
+          scheduleEl.querySelectorAll(".drag-source, .drag-over").forEach(el => {
+            el.classList.remove("drag-source", "drag-over");
+          });
+        });
 
         const text = document.createElement("span");
         text.className = "task-text";
@@ -501,6 +556,7 @@ body {
         del.className = "task-delete";
         del.innerHTML = "&times;";
         del.title = "Delete task";
+        del.draggable = false;
         del.addEventListener("click", function(e) {
           e.stopPropagation();
           deleteTask(h);
@@ -515,6 +571,26 @@ body {
         empty.textContent = "Click to add...";
         area.appendChild(empty);
       }
+
+      slot.addEventListener("dragover", function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (dragSourceHour !== null && dragSourceHour !== h) {
+          slot.classList.add("drag-over");
+        }
+      });
+
+      slot.addEventListener("dragleave", function() {
+        slot.classList.remove("drag-over");
+      });
+
+      slot.addEventListener("drop", function(e) {
+        e.preventDefault();
+        slot.classList.remove("drag-over");
+        const fromHour = parseInt(e.dataTransfer.getData("text/plain"), 10);
+        if (isNaN(fromHour) || fromHour === h) return;
+        moveTask(fromHour, h);
+      });
 
       slot.addEventListener("click", function() {
         openModal(h);
@@ -556,6 +632,23 @@ body {
   }
 
   // Task operations
+  function moveTask(fromHour, toHour) {
+    const tasks = loadTasks(currentDate);
+    if (!tasks[fromHour]) return;
+    // Swap if target has a task, otherwise just move
+    const fromTask = tasks[fromHour];
+    const toTask = tasks[toHour];
+    if (toTask) {
+      tasks[fromHour] = toTask;
+      tasks[toHour] = fromTask;
+    } else {
+      delete tasks[fromHour];
+      tasks[toHour] = fromTask;
+    }
+    saveTasks(currentDate, tasks);
+    render();
+  }
+
   function deleteTask(hour) {
     const tasks = loadTasks(currentDate);
     delete tasks[hour];
