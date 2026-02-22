@@ -27,11 +27,11 @@ body::before {
   pointer-events: none;
 }
 
-/* Galaxy — deep purple/blue nebula star field */
+/* Galaxy — Orion Nebula */
 body[data-theme="galaxy"]::before {
   background-image:
     linear-gradient(to bottom, rgba(11,13,26,0.5), rgba(11,13,26,0.75)),
-    url('https://images.unsplash.com/photo-1677029907981-e9a44fb7409a?w=1920&q=80');
+    url('https://images.unsplash.com/photo-1741016825495-1faf2afc19d6?w=1920&q=80');
   background-size: cover;
   background-position: center;
 }
@@ -120,38 +120,6 @@ body[data-theme="tron"]::before {
   text-align: center;
 }
 
-/* Theme switcher */
-.theme-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.theme-btn {
-  background: transparent;
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  padding: 4px 14px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--muted);
-  transition: border-color 0.15s, color 0.15s;
-  font-family: inherit;
-}
-
-.theme-btn:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.theme-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* Info bar (market + weather) */
 .info-bar {
   display: flex;
@@ -195,32 +163,19 @@ body[data-theme="tron"]::before {
 .weather-tile {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
-  min-width: 90px;
-  cursor: pointer;
-  position: relative;
+  min-width: 200px;
+  gap: 4px;
 }
 
-.weather-temp {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.weather-desc {
-  font-size: 0.6rem;
-  color: var(--muted);
-  margin-top: 1px;
-  max-width: 80px;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.weather-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .weather-loc {
@@ -231,36 +186,55 @@ body[data-theme="tron"]::before {
   letter-spacing: 0.3px;
 }
 
-.weather-edit {
-  position: absolute;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 4px;
-}
-
-.weather-edit.active {
+.weather-main {
   display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.weather-edit input {
-  width: 80px;
-  padding: 4px 6px;
-  font-size: 0.7rem;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--input-bg);
+.weather-temp {
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text);
-  outline: none;
-  text-align: center;
 }
 
-.weather-edit input:focus {
-  border-color: var(--accent);
+.weather-feels {
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+.weather-desc {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.weather-details {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.weather-detail {
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+.weather-detail b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.weather-forecast {
+  font-size: 0.6rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 3px;
+  margin-top: 1px;
+}
+
+.weather-forecast b {
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* Schedule grid */
@@ -584,12 +558,6 @@ body[data-theme="tron"]::before {
       <span class="date-display" id="dateDisplay"></span>
       <button class="arrow-btn" id="nextDay">&rarr;</button>
     </div>
-    <div class="theme-bar">
-      <button class="theme-btn active" data-theme="galaxy">Galaxy</button>
-      <button class="theme-btn" data-theme="dune">Dune</button>
-      <button class="theme-btn" data-theme="blade-runner">Blade Runner</button>
-      <button class="theme-btn" data-theme="tron">Tron</button>
-    </div>
   </div>
 
   <div class="info-bar" id="infoBar"></div>
@@ -706,22 +674,10 @@ body[data-theme="tron"]::before {
     for (const [prop, value] of Object.entries(theme)) {
       document.body.style.setProperty(prop, value);
     }
-    document.querySelectorAll(".theme-btn").forEach(function(btn) {
-      btn.classList.toggle("active", btn.dataset.theme === name);
-    });
-    localStorage.setItem("dayplanner_theme", name);
   }
 
-  // Apply saved theme immediately (before render)
-  applyTheme(localStorage.getItem("dayplanner_theme") || "galaxy");
-
-  // Theme button listeners
-  document.querySelectorAll(".theme-btn").forEach(function(btn) {
-    btn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      applyTheme(this.dataset.theme);
-    });
-  });
+  // Always apply Galaxy theme
+  applyTheme("galaxy");
 
   // ── Day Planner app ──────────────────────────────────────────
   const START_HOUR = 6;
@@ -1019,23 +975,38 @@ body[data-theme="tron"]::before {
   setInterval(updateTimeIndicator, 60000);
 
   // ── Market data & weather tiles ───────────────────────────────
-  let weatherLocation = localStorage.getItem("dayplanner_weather_loc") || "Auckland";
+  let weatherLocation = "";
 
-  async function loadInfoBar() {
+  // Auto-detect location via browser geolocation
+  function initLocation() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          weatherLocation = pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4);
+          loadInfoBar();
+        },
+        function() {
+          weatherLocation = "Auckland";
+          loadInfoBar();
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      weatherLocation = "Auckland";
+      loadInfoBar();
+    }
+  }
+
+  async function loadTickers() {
     const bar = document.getElementById("infoBar");
-    bar.innerHTML = "";
-
-    // Fetch market quotes and weather in parallel
-    const [quotesRes, weatherRes] = await Promise.allSettled([
-      fetch("/api/quotes").then(r => r.ok ? r.json() : null),
-      fetch("/api/weather?location=" + encodeURIComponent(weatherLocation)).then(r => r.ok ? r.json() : null)
-    ]);
-
-    const quotes = quotesRes.status === "fulfilled" ? quotesRes.value : null;
-    const weather = weatherRes.status === "fulfilled" ? weatherRes.value : null;
-
-    // Render ticker tiles
-    if (quotes) {
+    try {
+      const res = await fetch("/api/quotes");
+      if (!res.ok) return;
+      const quotes = await res.json();
+      // Remove old ticker tiles only
+      bar.querySelectorAll(".ticker-tile").forEach(function(el) { el.remove(); });
+      // Insert before weather tile
+      const weatherEl = bar.querySelector(".weather-tile");
       for (const [name, info] of Object.entries(quotes)) {
         const tile = document.createElement("div");
         tile.className = "ticker-tile";
@@ -1057,76 +1028,102 @@ body[data-theme="tron"]::before {
 
         tile.appendChild(label);
         tile.appendChild(pct);
-        bar.appendChild(tile);
+        if (weatherEl) {
+          bar.insertBefore(tile, weatherEl);
+        } else {
+          bar.appendChild(tile);
+        }
       }
+    } catch (e) {
+      console.error("Failed to load tickers:", e);
     }
+  }
 
-    // Render weather tile
+  async function loadWeather() {
+    const bar = document.getElementById("infoBar");
+    // Remove old weather tile
+    const old = bar.querySelector(".weather-tile");
+    if (old) old.remove();
+
+    let weather = null;
+    try {
+      const res = await fetch("/api/weather?location=" + encodeURIComponent(weatherLocation));
+      if (res.ok) weather = await res.json();
+    } catch (e) {}
+
+    const w = weather;
     const wTile = document.createElement("div");
     wTile.className = "weather-tile";
 
+    // Header: location name
+    const header = document.createElement("div");
+    header.className = "weather-header";
     const wLoc = document.createElement("span");
     wLoc.className = "weather-loc";
-    wLoc.textContent = weather ? weather.location : weatherLocation;
+    wLoc.textContent = w ? w.location : weatherLocation;
+    header.appendChild(wLoc);
 
+    // Main: temp + feels like + desc
+    const main = document.createElement("div");
+    main.className = "weather-main";
     const wTemp = document.createElement("span");
     wTemp.className = "weather-temp";
-    wTemp.textContent = weather && weather.temp_c !== null ? weather.temp_c + "\u00B0C" : "\u2014";
+    wTemp.textContent = w && w.temp_c !== null ? w.temp_c + "\u00B0C" : "\u2014";
+    main.appendChild(wTemp);
 
-    const wDesc = document.createElement("span");
-    wDesc.className = "weather-desc";
-    wDesc.textContent = weather ? weather.desc : "";
+    if (w && w.feels_like_c) {
+      const feels = document.createElement("span");
+      feels.className = "weather-feels";
+      feels.textContent = "Feels " + w.feels_like_c + "\u00B0";
+      main.appendChild(feels);
+    }
 
-    // Edit overlay
-    const editDiv = document.createElement("div");
-    editDiv.className = "weather-edit";
-    const editInput = document.createElement("input");
-    editInput.type = "text";
-    editInput.value = weatherLocation;
-    editInput.placeholder = "City name";
-    editDiv.appendChild(editInput);
+    const desc = document.createElement("span");
+    desc.className = "weather-desc";
+    desc.textContent = w ? w.desc : "";
 
-    wTile.appendChild(wLoc);
-    wTile.appendChild(wTemp);
-    wTile.appendChild(wDesc);
-    wTile.appendChild(editDiv);
+    // Details row: H/L, Rain, Wind, Humidity
+    const details = document.createElement("div");
+    details.className = "weather-details";
+    if (w) {
+      if (w.today_high && w.today_low) {
+        details.innerHTML += '<span class="weather-detail"><b>' + w.today_high + '\u00B0</b>/' + w.today_low + '\u00B0</span>';
+      }
+      if (w.rain_pct !== null && w.rain_pct !== undefined) {
+        details.innerHTML += '<span class="weather-detail">Rain <b>' + w.rain_pct + '%</b></span>';
+      }
+      if (w.wind_kmh) {
+        details.innerHTML += '<span class="weather-detail">Wind <b>' + w.wind_kmh + '</b>km/h ' + (w.wind_dir || '') + '</span>';
+      }
+      if (w.humidity) {
+        details.innerHTML += '<span class="weather-detail">Hum <b>' + w.humidity + '%</b></span>';
+      }
+    }
+
+    // Tomorrow forecast
+    const forecast = document.createElement("div");
+    forecast.className = "weather-forecast";
+    if (w && w.tomorrow_high && w.tomorrow_low) {
+      let txt = "Tomorrow: <b>" + w.tomorrow_high + "\u00B0</b>/" + w.tomorrow_low + "\u00B0";
+      if (w.tomorrow_desc) txt += " \u2014 " + w.tomorrow_desc;
+      forecast.innerHTML = txt;
+    }
+
+    wTile.appendChild(header);
+    wTile.appendChild(main);
+    wTile.appendChild(desc);
+    wTile.appendChild(details);
+    if (forecast.innerHTML) wTile.appendChild(forecast);
     bar.appendChild(wTile);
-
-    // Click to edit location
-    wTile.addEventListener("click", function(e) {
-      if (editDiv.classList.contains("active")) return;
-      editDiv.classList.add("active");
-      editInput.value = weatherLocation;
-      editInput.focus();
-      editInput.select();
-    });
-
-    editInput.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") {
-        const val = editInput.value.trim();
-        if (val) {
-          weatherLocation = val;
-          localStorage.setItem("dayplanner_weather_loc", val);
-        }
-        editDiv.classList.remove("active");
-        loadInfoBar();
-      }
-      if (e.key === "Escape") {
-        editDiv.classList.remove("active");
-      }
-    });
-
-    editInput.addEventListener("blur", function() {
-      editDiv.classList.remove("active");
-    });
-
-    editInput.addEventListener("click", function(e) {
-      e.stopPropagation();
-    });
   }
 
-  loadInfoBar();
-  setInterval(loadInfoBar, 120000);
+  async function loadInfoBar() {
+    await Promise.all([loadTickers(), loadWeather()]);
+  }
+
+  initLocation();
+  setInterval(loadTickers, 5000);
+  setInterval(loadWeather, 600000);
 
   // One-time migration: move localStorage data to server, then clean up
   async function migrateLocalStorage() {

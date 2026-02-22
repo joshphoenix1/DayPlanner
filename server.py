@@ -79,20 +79,52 @@ def fetch_weather(location):
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
         current = data["current_condition"][0]
+        today = data.get("weather", [{}])[0]
+        tomorrow = data.get("weather", [{}, {}])[1] if len(data.get("weather", [])) > 1 else {}
+
+        # Find current/upcoming hours rain chance
+        hourly = today.get("hourly", [])
+        from datetime import datetime as _dt
+        now_hour = _dt.now().hour
+        rain_pct = None
+        for h in hourly:
+            h_time = int(h.get("time", "0")) // 100
+            if h_time >= now_hour:
+                rain_pct = h.get("chanceofrain", "0")
+                break
+        if rain_pct is None and hourly:
+            rain_pct = hourly[-1].get("chanceofrain", "0")
+
         result = {
             "location": data.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", location),
             "temp_c": current.get("temp_C"),
-            "temp_f": current.get("temp_F"),
+            "feels_like_c": current.get("FeelsLikeC"),
             "desc": current.get("weatherDesc", [{}])[0].get("value", ""),
-            "icon": current.get("weatherCode", ""),
+            "humidity": current.get("humidity"),
+            "wind_kmh": current.get("windspeedKmph"),
+            "wind_dir": current.get("winddir16Point"),
+            "rain_pct": rain_pct,
+            "uv": current.get("uvIndex"),
+            "today_high": today.get("maxtempC"),
+            "today_low": today.get("mintempC"),
+            "tomorrow_high": tomorrow.get("maxtempC"),
+            "tomorrow_low": tomorrow.get("mintempC"),
+            "tomorrow_desc": "",
         }
+        # Get tomorrow's general description from midday hour
+        tmrw_hourly = tomorrow.get("hourly", [])
+        for h in tmrw_hourly:
+            if int(h.get("time", "0")) // 100 == 12:
+                result["tomorrow_desc"] = h.get("weatherDesc", [{}])[0].get("value", "")
+                break
+
         _weather_cache["data"] = result
         _weather_cache["ts"] = now
         _weather_cache["loc"] = location
         return result
     except Exception as e:
         print(f"[Weather] Failed to fetch for {location}: {e}")
-        return {"location": location, "temp_c": None, "desc": "Unavailable", "icon": ""}
+        return {"location": location, "temp_c": None, "desc": "Unavailable"}
 
 # Track sent reminders: set of "YYYY-MM-DD-HH"
 sent_reminders = set()
