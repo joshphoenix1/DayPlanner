@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day Planner</title>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  color: #4361ee;
+  margin-bottom: 16px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.nav button {
+  background: #16213e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #e0e0e0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.nav button:hover {
+  background: #4361ee;
+  color: #fff;
+  border-color: #4361ee;
+}
+
+.nav .arrow-btn {
+  padding: 8px 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.date-display {
+  font-size: 1.05rem;
+  font-weight: 600;
+  min-width: 180px;
+  text-align: center;
+}
+
+/* Schedule grid */
+.schedule {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #2a2a4a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+.time-slot {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  min-height: 56px;
+  background: #16213e;
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.time-slot:hover {
+  background: #1f2f54;
+}
+
+.time-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8a8aaa;
+  background: #0f1a33;
+  border-right: 1px solid #2a2a4a;
+  user-select: none;
+}
+
+.task-area {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  min-height: 56px;
+  position: relative;
+}
+
+.task-card {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #1f2f54;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  border-left: 4px solid #4361ee;
+  word-break: break-word;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-card.color-blue   { border-left-color: #4361ee; background: rgba(67,97,238,0.15); }
+.task-card.color-green  { border-left-color: #00b894; background: rgba(0,184,148,0.15); }
+.task-card.color-orange { border-left-color: #fdcb6e; background: rgba(253,203,110,0.12); }
+.task-card.color-red    { border-left-color: #e17055; background: rgba(225,112,85,0.15); }
+
+.task-text {
+  flex: 1;
+}
+
+.task-delete {
+  background: none;
+  border: none;
+  color: #555577;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.task-delete:hover {
+  color: #e17055;
+  background: rgba(225, 112, 85, 0.15);
+}
+
+.empty-slot {
+  color: #555577;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* Current time indicator */
+.time-indicator {
+  position: absolute;
+  left: 80px;
+  right: 0;
+  height: 2px;
+  background: #e74c3c;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.time-indicator::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  background: #e74c3c;
+  border-radius: 50%;
+}
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: #16213e;
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  border: 1px solid #2a2a4a;
+  animation: modalIn 0.2s ease-out;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal h2 {
+  font-size: 1.15rem;
+  margin-bottom: 20px;
+  color: #4361ee;
+}
+
+.modal label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8a8aaa;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.modal input[type="text"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #2a2a4a;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 18px;
+  background: #0f1a33;
+  color: #e0e0e0;
+}
+
+.modal input[type="text"]:focus {
+  border-color: #4361ee;
+}
+
+.color-picker {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.color-option:hover {
+  transform: scale(1.12);
+}
+
+.color-option.selected {
+  border-color: #e0e0e0;
+}
+
+.color-option[data-color="blue"]   { background: #4361ee; }
+.color-option[data-color="green"]  { background: #00b894; }
+.color-option[data-color="orange"] { background: #fdcb6e; }
+.color-option[data-color="red"]    { background: #e17055; }
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-save {
+  background: #4361ee;
+  color: #fff;
+}
+
+.btn-save:hover {
+  background: #3451d1;
+}
+
+.btn-cancel {
+  background: #2a2a4a;
+  color: #8a8aaa;
+}
+
+.btn-cancel:hover {
+  background: #3a3a5a;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .container {
+    padding: 16px 8px;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
+  .nav {
+    gap: 6px;
+  }
+
+  .nav button {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  .date-display {
+    font-size: 0.9rem;
+    min-width: 140px;
+  }
+
+  .time-slot {
+    grid-template-columns: 60px 1fr;
+    min-height: 48px;
+  }
+
+  .time-label {
+    font-size: 0.72rem;
+  }
+
+  .time-indicator {
+    left: 60px;
+  }
+
+  .task-area {
+    padding: 6px 10px;
+  }
+
+  .modal {
+    padding: 20px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>Day Planner</h1>
+    <div class="nav">
+      <button class="arrow-btn" id="prevDay">&larr;</button>
+      <button id="todayBtn">Today</button>
+      <span class="date-display" id="dateDisplay"></span>
+      <button class="arrow-btn" id="nextDay">&rarr;</button>
+    </div>
+  </div>
+
+  <div class="schedule" id="schedule"></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Add Task</h2>
+    <label for="taskInput">Task</label>
+    <input type="text" id="taskInput" placeholder="What are you planning?" maxlength="200" autocomplete="off">
+    <label>Color</label>
+    <div class="color-picker" id="colorPicker">
+      <div class="color-option selected" data-color="blue"></div>
+      <div class="color-option" data-color="green"></div>
+      <div class="color-option" data-color="orange"></div>
+      <div class="color-option" data-color="red"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modalCancel">Cancel</button>
+      <button class="btn-save" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const START_HOUR = 6;
+  const END_HOUR = 23;
+  const STORAGE_PREFIX = "dayplanner_";
+
+  let currentDate = new Date();
+  let editingHour = null;
+  let selectedColor = "blue";
+
+  // Elements
+  const scheduleEl = document.getElementById("schedule");
+  const dateDisplayEl = document.getElementById("dateDisplay");
+  const modalOverlay = document.getElementById("modalOverlay");
+  const taskInput = document.getElementById("taskInput");
+  const modalTitle = document.getElementById("modalTitle");
+  const colorPicker = document.getElementById("colorPicker");
+
+  // Helpers
+  function dateKey(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function storageKey(d) {
+    return STORAGE_PREFIX + dateKey(d);
+  }
+
+  function loadTasks(d) {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey(d))) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveTasks(d, tasks) {
+    if (Object.keys(tasks).length === 0) {
+      localStorage.removeItem(storageKey(d));
+    } else {
+      localStorage.setItem(storageKey(d), JSON.stringify(tasks));
+    }
+  }
+
+  function formatHour(h) {
+    if (h === 0) return "12 AM";
+    if (h === 12) return "12 PM";
+    if (h < 12) return h + " AM";
+    return (h - 12) + " PM";
+  }
+
+  function formatDate(d) {
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  function isToday(d) {
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth() === now.getMonth() &&
+           d.getDate() === now.getDate();
+  }
+
+  // Render
+  function render() {
+    dateDisplayEl.textContent = formatDate(currentDate);
+    const tasks = loadTasks(currentDate);
+
+    scheduleEl.innerHTML = "";
+
+    for (let h = START_HOUR; h <= END_HOUR; h++) {
+      const slot = document.createElement("div");
+      slot.className = "time-slot";
+      slot.dataset.hour = h;
+
+      const label = document.createElement("div");
+      label.className = "time-label";
+      label.textContent = formatHour(h);
+
+      const area = document.createElement("div");
+      area.className = "task-area";
+
+      const task = tasks[h];
+      if (task) {
+        const card = document.createElement("div");
+        card.className = `task-card color-${task.color || "blue"}`;
+
+        const text = document.createElement("span");
+        text.className = "task-text";
+        text.textContent = task.text;
+
+        const del = document.createElement("button");
+        del.className = "task-delete";
+        del.innerHTML = "&times;";
+        del.title = "Delete task";
+        del.addEventListener("click", function(e) {
+          e.stopPropagation();
+          deleteTask(h);
+        });
+
+        card.appendChild(text);
+        card.appendChild(del);
+        area.appendChild(card);
+      } else {
+        const empty = document.createElement("span");
+        empty.className = "empty-slot";
+        empty.textContent = "Click to add...";
+        area.appendChild(empty);
+      }
+
+      slot.addEventListener("click", function() {
+        openModal(h);
+      });
+
+      slot.appendChild(label);
+      slot.appendChild(area);
+      scheduleEl.appendChild(slot);
+    }
+
+    updateTimeIndicator();
+  }
+
+  function updateTimeIndicator() {
+    const existing = scheduleEl.querySelector(".time-indicator");
+    if (existing) existing.remove();
+
+    if (!isToday(currentDate)) return;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    if (currentHour < START_HOUR || currentHour > END_HOUR) return;
+
+    const slotIndex = currentHour - START_HOUR;
+    const slots = scheduleEl.querySelectorAll(".time-slot");
+    if (!slots[slotIndex]) return;
+
+    const slot = slots[slotIndex];
+    const fraction = currentMinute / 60;
+    const slotHeight = slot.offsetHeight;
+    const offsetTop = slot.offsetTop + fraction * slotHeight;
+
+    const indicator = document.createElement("div");
+    indicator.className = "time-indicator";
+    indicator.style.top = offsetTop + "px";
+    scheduleEl.appendChild(indicator);
+  }
+
+  // Task operations
+  function deleteTask(hour) {
+    const tasks = loadTasks(currentDate);
+    delete tasks[hour];
+    saveTasks(currentDate, tasks);
+    render();
+  }
+
+  function openModal(hour) {
+    editingHour = hour;
+    const tasks = loadTasks(currentDate);
+    const existing = tasks[hour];
+
+    if (existing) {
+      modalTitle.textContent = "Edit Task — " + formatHour(hour);
+      taskInput.value = existing.text;
+      selectedColor = existing.color || "blue";
+    } else {
+      modalTitle.textContent = "Add Task — " + formatHour(hour);
+      taskInput.value = "";
+      selectedColor = "blue";
+    }
+
+    updateColorSelection();
+    modalOverlay.classList.add("active");
+    setTimeout(() => taskInput.focus(), 50);
+  }
+
+  function closeModal() {
+    modalOverlay.classList.remove("active");
+    editingHour = null;
+  }
+
+  function saveTask() {
+    const text = taskInput.value.trim();
+    if (!text) {
+      closeModal();
+      return;
+    }
+
+    const tasks = loadTasks(currentDate);
+    tasks[editingHour] = { text, color: selectedColor };
+    saveTasks(currentDate, tasks);
+    closeModal();
+    render();
+  }
+
+  function updateColorSelection() {
+    colorPicker.querySelectorAll(".color-option").forEach(el => {
+      el.classList.toggle("selected", el.dataset.color === selectedColor);
+    });
+  }
+
+  // Navigation
+  function changeDate(offset) {
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + offset);
+    render();
+  }
+
+  function goToday() {
+    currentDate = new Date();
+    render();
+  }
+
+  // Event listeners
+  document.getElementById("prevDay").addEventListener("click", () => changeDate(-1));
+  document.getElementById("nextDay").addEventListener("click", () => changeDate(1));
+  document.getElementById("todayBtn").addEventListener("click", goToday);
+  document.getElementById("modalCancel").addEventListener("click", closeModal);
+  document.getElementById("modalSave").addEventListener("click", saveTask);
+
+  modalOverlay.addEventListener("click", function(e) {
+    if (e.target === modalOverlay) closeModal();
+  });
+
+  document.addEventListener("keydown", function(e) {
+    if (!modalOverlay.classList.contains("active")) return;
+    if (e.key === "Escape") closeModal();
+    if (e.key === "Enter") saveTask();
+  });
+
+  colorPicker.querySelectorAll(".color-option").forEach(el => {
+    el.addEventListener("click", function(e) {
+      e.stopPropagation();
+      selectedColor = this.dataset.color;
+      updateColorSelection();
+    });
+  });
+
+  // Update time indicator every minute
+  setInterval(updateTimeIndicator, 60000);
+
+  // Init
+  render();
+})();
+</script>
+</body>
+</html>
