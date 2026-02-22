@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Day Planner server with REST API and email reminders."""
 
+import hashlib
 import json
 import os
 import smtplib
@@ -16,6 +17,11 @@ PORT = 6900
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tasks.json")
 INDEX_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 MAX_STORAGE_BYTES = 500 * 1024 * 1024  # 500 MB
+
+# Auth config — change these credentials
+AUTH_USER = "josh"
+AUTH_PASS = "bullet"
+_AUTH_TOKEN = hashlib.sha256((AUTH_USER + ":" + AUTH_PASS + ":dayplanner_salt").encode()).hexdigest()
 
 # Email config
 SMTP_HOST = "smtp.gmail.com"
@@ -34,6 +40,99 @@ _QUOTE_SYMBOLS = {"SPX": "^GSPC", "QQQ": "QQQ", "Gold": "GC=F", "BTC": "BTC-USD"
 # Windguru weather cache
 _weather_cache = {"data": None, "ts": 0}
 _WEATHER_TTL = 600  # seconds
+
+# Philosophy quote cache
+_quote_cache = {"data": None, "ts": 0}
+_QUOTE_TTL = 3600  # refresh every hour
+
+_TWITTER_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+_TWITTER_USER_ID = "1434674691264942083"  # @PhilosophyDose_
+
+
+def fetch_quote():
+    import re
+    import subprocess
+    now = time.time()
+    if _quote_cache["data"] and now - _quote_cache["ts"] < _QUOTE_TTL:
+        return _quote_cache["data"]
+
+    try:
+        # Get guest token via curl
+        gt_result = subprocess.run(
+            ["curl", "-s", "-X", "POST",
+             "https://api.twitter.com/1.1/guest/activate.json",
+             "-H", "Authorization: Bearer " + _TWITTER_BEARER],
+            capture_output=True, text=True, timeout=10
+        )
+        guest_token = json.loads(gt_result.stdout).get("guest_token", "")
+        if not guest_token:
+            raise Exception("No guest token")
+
+        # Fetch user tweets via GraphQL using curl
+        variables = json.dumps({
+            "userId": _TWITTER_USER_ID,
+            "count": 10,
+            "includePromotedContent": False,
+            "withQuickPromoteEligibilityTweetFields": False,
+            "withVoice": False,
+            "withV2Timeline": True,
+        })
+        features = json.dumps({
+            "rweb_tipjar_consumption_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "tweetypie_unmention_optimization_enabled": True,
+            "responsive_web_edit_tweet_api_enabled": True,
+            "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+            "view_counts_everywhere_api_enabled": True,
+            "longform_notetweets_consumption_enabled": True,
+            "tweet_awards_web_tipping_enabled": False,
+            "freedom_of_speech_not_reach_fetch_enabled": True,
+            "standardized_nudges_misinfo": True,
+            "longform_notetweets_rich_text_read_enabled": True,
+            "responsive_web_enhance_cards_enabled": False,
+            "communities_web_enable_tweet_community_results_fetch": True,
+            "articles_preview_enabled": True,
+            "rweb_video_timestamps_enabled": True,
+        })
+        encoded_vars = urllib.parse.quote(variables, safe="")
+        encoded_feat = urllib.parse.quote(features, safe="")
+        url = "https://twitter.com/i/api/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets?variables={}&features={}".format(
+            encoded_vars, encoded_feat
+        )
+        tw_result = subprocess.run(
+            ["curl", "-s", url,
+             "-H", "Authorization: Bearer " + _TWITTER_BEARER,
+             "-H", "x-guest-token: " + guest_token],
+            capture_output=True, text=True, timeout=15
+        )
+        data = json.loads(tw_result.stdout)
+
+        # Extract the most recent original tweet text
+        instructions = (data.get("data", {}).get("user", {}).get("result", {})
+                        .get("timeline_v2", {}).get("timeline", {}).get("instructions", []))
+        for inst in instructions:
+            for entry in inst.get("entries", []):
+                result = (entry.get("content", {}).get("itemContent", {})
+                          .get("tweet_results", {}).get("result", {}))
+                legacy = result.get("legacy", {})
+                text = legacy.get("full_text", "")
+                # Skip retweets and replies
+                if text and not text.startswith("RT @") and not text.startswith("@"):
+                    # Clean up t.co links
+                    text = re.sub(r'https://t\.co/\S+', '', text).strip()
+                    result_data = {"text": text}
+                    _quote_cache["data"] = result_data
+                    _quote_cache["ts"] = now
+                    return result_data
+
+        raise Exception("No tweets found")
+    except Exception as e:
+        print(f"[Quote] Failed to fetch: {e}")
+        return _quote_cache.get("data") or {"text": ""}
 _WINDGURU_SPOT = 1317523
 _WINDGURU_MODEL = 3  # GFS 13km
 
@@ -274,23 +373,70 @@ class DayPlannerHandler(BaseHTTPRequestHandler):
         # Quieter logging
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
 
+    def _check_auth(self):
+        token = self.headers.get("X-Auth-Token", "")
+        if token != _AUTH_TOKEN:
+            body = json.dumps({"error": "unauthorized"}).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", len(body))
+            self.end_headers()
+            self.wfile.write(body)
+            return False
+        return True
+
+    def do_POST(self):
+        if self.path == "/api/auth":
+            self._post_auth()
+        else:
+            self.send_error(404)
+
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
             self._serve_index()
         elif self.path.startswith("/api/tasks/"):
-            self._get_tasks()
+            if self._check_auth():
+                self._get_tasks()
         elif self.path == "/api/quotes":
-            self._get_quotes()
+            if self._check_auth():
+                self._get_quotes()
         elif self.path.startswith("/api/weather"):
-            self._get_weather()
+            if self._check_auth():
+                self._get_weather()
+        elif self.path == "/api/quote":
+            if self._check_auth():
+                self._get_quote()
         else:
             self.send_error(404)
 
     def do_PUT(self):
         if self.path.startswith("/api/tasks/"):
-            self._put_tasks()
+            if self._check_auth():
+                self._put_tasks()
         else:
             self.send_error(404)
+
+    def _post_auth(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length)
+        try:
+            creds = json.loads(raw)
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        user = creds.get("user", "")
+        pw = creds.get("pass", "")
+        token = hashlib.sha256((user + ":" + pw + ":dayplanner_salt").encode()).hexdigest()
+        if token == _AUTH_TOKEN:
+            body = json.dumps({"ok": True, "token": token}).encode("utf-8")
+            self.send_response(200)
+        else:
+            body = json.dumps({"ok": False}).encode("utf-8")
+            self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", len(body))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_index(self):
         try:
@@ -318,6 +464,15 @@ class DayPlannerHandler(BaseHTTPRequestHandler):
     def _get_quotes(self):
         quotes = fetch_quotes()
         body = json.dumps(quotes).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", len(body))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _get_quote(self):
+        quote = fetch_quote()
+        body = json.dumps(quote).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
