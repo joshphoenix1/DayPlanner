@@ -13,9 +13,54 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #1a1a2e;
-  color: #e0e0e0;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Galaxy background */
+body[data-theme="galaxy"]::before {
+  background-image:
+    linear-gradient(to bottom, rgba(11,13,26,0.55), rgba(11,13,26,0.8)),
+    url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Dune background */
+body[data-theme="dune"]::before {
+  background-image:
+    linear-gradient(to bottom, rgba(26,21,16,0.55), rgba(26,21,16,0.8)),
+    url('https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Blade Runner background */
+body[data-theme="blade-runner"]::before {
+  background-image:
+    linear-gradient(to bottom, rgba(10,10,18,0.5), rgba(10,10,18,0.8)),
+    url('https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Tron background */
+body[data-theme="tron"]::before {
+  background-image:
+    linear-gradient(to bottom, rgba(5,5,16,0.6), rgba(5,5,16,0.85)),
+    url('https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1920&q=80');
+  background-size: cover;
+  background-position: center;
 }
 
 .container {
@@ -32,7 +77,7 @@ body {
 
 .header h1 {
   font-size: 1.5rem;
-  color: #4361ee;
+  color: var(--accent);
   margin-bottom: 16px;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -46,20 +91,20 @@ body {
 }
 
 .nav button {
-  background: #16213e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #e0e0e0;
+  color: var(--text);
   transition: background 0.15s, border-color 0.15s;
 }
 
 .nav button:hover {
-  background: #4361ee;
+  background: var(--accent);
   color: #fff;
-  border-color: #4361ee;
+  border-color: var(--accent);
 }
 
 .nav .arrow-btn {
@@ -75,13 +120,156 @@ body {
   text-align: center;
 }
 
+/* Theme switcher */
+.theme-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.theme-btn {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.theme-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.theme-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Info bar (market + weather) */
+.info-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.ticker-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 72px;
+}
+
+.ticker-name {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ticker-pct {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.ticker-pct.positive { color: var(--card-green); }
+.ticker-pct.negative { color: var(--card-red); }
+.ticker-pct.neutral  { color: var(--muted); }
+
+.weather-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 90px;
+  cursor: pointer;
+  position: relative;
+}
+
+.weather-temp {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.weather-desc {
+  font-size: 0.6rem;
+  color: var(--muted);
+  margin-top: 1px;
+  max-width: 80px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-loc {
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.weather-edit {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.weather-edit.active {
+  display: flex;
+}
+
+.weather-edit input {
+  width: 80px;
+  padding: 4px 6px;
+  font-size: 0.7rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  outline: none;
+  text-align: center;
+}
+
+.weather-edit input:focus {
+  border-color: var(--accent);
+}
+
 /* Schedule grid */
 .schedule {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: #2a2a4a;
+  background: var(--border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0,0,0,0.3);
@@ -91,14 +279,14 @@ body {
   display: grid;
   grid-template-columns: 80px 1fr;
   min-height: 56px;
-  background: #16213e;
+  background: var(--surface);
   cursor: pointer;
   transition: background 0.12s;
   position: relative;
 }
 
 .time-slot:hover {
-  background: #1f2f54;
+  background: var(--surface-hover);
 }
 
 .time-label {
@@ -107,9 +295,9 @@ body {
   justify-content: center;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #8a8aaa;
-  background: #0f1a33;
-  border-right: 1px solid #2a2a4a;
+  color: var(--muted);
+  background: var(--panel);
+  border-right: 1px solid var(--border);
   user-select: none;
 }
 
@@ -125,10 +313,10 @@ body {
   flex: 1;
   padding: 8px 12px;
   border-radius: 6px;
-  background: #1f2f54;
+  background: var(--surface-hover);
   font-size: 0.9rem;
   line-height: 1.4;
-  border-left: 4px solid #4361ee;
+  border-left: 4px solid var(--card-blue);
   word-break: break-word;
   position: relative;
   display: flex;
@@ -137,10 +325,10 @@ body {
   gap: 8px;
 }
 
-.task-card.color-blue   { border-left-color: #4361ee; background: rgba(67,97,238,0.15); }
-.task-card.color-green  { border-left-color: #00b894; background: rgba(0,184,148,0.15); }
-.task-card.color-orange { border-left-color: #fdcb6e; background: rgba(253,203,110,0.12); }
-.task-card.color-red    { border-left-color: #e17055; background: rgba(225,112,85,0.15); }
+.task-card.color-blue   { border-left-color: var(--card-blue);   background: color-mix(in srgb, var(--card-blue) 15%, transparent); }
+.task-card.color-green  { border-left-color: var(--card-green);  background: color-mix(in srgb, var(--card-green) 15%, transparent); }
+.task-card.color-orange { border-left-color: var(--card-orange); background: color-mix(in srgb, var(--card-orange) 12%, transparent); }
+.task-card.color-red    { border-left-color: var(--card-red);    background: color-mix(in srgb, var(--card-red) 15%, transparent); }
 
 .task-text {
   flex: 1;
@@ -149,7 +337,7 @@ body {
 .task-delete {
   background: none;
   border: none;
-  color: #555577;
+  color: var(--muted);
   cursor: pointer;
   font-size: 1.1rem;
   padding: 2px 4px;
@@ -160,12 +348,12 @@ body {
 }
 
 .task-delete:hover {
-  color: #e17055;
-  background: rgba(225, 112, 85, 0.15);
+  color: var(--card-red);
+  background: color-mix(in srgb, var(--card-red) 15%, transparent);
 }
 
 .empty-slot {
-  color: #555577;
+  color: var(--muted);
   font-size: 0.85rem;
   font-style: italic;
 }
@@ -197,7 +385,7 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: var(--modal-overlay);
   z-index: 100;
   align-items: center;
   justify-content: center;
@@ -209,13 +397,13 @@ body {
 }
 
 .modal {
-  background: #16213e;
+  background: var(--surface);
   border-radius: 14px;
   padding: 28px;
   width: 100%;
   max-width: 400px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  border: 1px solid #2a2a4a;
+  border: 1px solid var(--border);
   animation: modalIn 0.2s ease-out;
 }
 
@@ -227,14 +415,14 @@ body {
 .modal h2 {
   font-size: 1.15rem;
   margin-bottom: 20px;
-  color: #4361ee;
+  color: var(--accent);
 }
 
 .modal label {
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #8a8aaa;
+  color: var(--muted);
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -243,19 +431,19 @@ body {
 .modal input[type="text"] {
   width: 100%;
   padding: 10px 14px;
-  border: 1.5px solid #2a2a4a;
+  border: 1.5px solid var(--border);
   border-radius: 8px;
   font-size: 0.95rem;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
   margin-bottom: 18px;
-  background: #0f1a33;
-  color: #e0e0e0;
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 .modal input[type="text"]:focus {
-  border-color: #4361ee;
+  border-color: var(--accent);
 }
 
 .color-picker {
@@ -278,13 +466,13 @@ body {
 }
 
 .color-option.selected {
-  border-color: #e0e0e0;
+  border-color: var(--text);
 }
 
-.color-option[data-color="blue"]   { background: #4361ee; }
-.color-option[data-color="green"]  { background: #00b894; }
-.color-option[data-color="orange"] { background: #fdcb6e; }
-.color-option[data-color="red"]    { background: #e17055; }
+.color-option[data-color="blue"]   { background: var(--card-blue); }
+.color-option[data-color="green"]  { background: var(--card-green); }
+.color-option[data-color="orange"] { background: var(--card-orange); }
+.color-option[data-color="red"]    { background: var(--card-red); }
 
 .modal-actions {
   display: flex;
@@ -303,21 +491,21 @@ body {
 }
 
 .btn-save {
-  background: #4361ee;
+  background: var(--accent);
   color: #fff;
 }
 
 .btn-save:hover {
-  background: #3451d1;
+  background: var(--accent-hover);
 }
 
 .btn-cancel {
-  background: #2a2a4a;
-  color: #8a8aaa;
+  background: var(--cancel-bg);
+  color: var(--cancel-text);
 }
 
 .btn-cancel:hover {
-  background: #3a3a5a;
+  background: var(--surface-hover);
 }
 
 /* Drag and drop */
@@ -330,8 +518,8 @@ body {
 }
 
 .time-slot.drag-over {
-  background: #1f2f54;
-  box-shadow: inset 0 0 0 2px #4361ee;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .time-slot.drag-source {
@@ -385,7 +573,7 @@ body {
 }
 </style>
 </head>
-<body>
+<body data-theme="galaxy">
 
 <div class="container">
   <div class="header">
@@ -396,7 +584,15 @@ body {
       <span class="date-display" id="dateDisplay"></span>
       <button class="arrow-btn" id="nextDay">&rarr;</button>
     </div>
+    <div class="theme-bar">
+      <button class="theme-btn active" data-theme="galaxy">Galaxy</button>
+      <button class="theme-btn" data-theme="dune">Dune</button>
+      <button class="theme-btn" data-theme="blade-runner">Blade Runner</button>
+      <button class="theme-btn" data-theme="tron">Tron</button>
+    </div>
   </div>
+
+  <div class="info-bar" id="infoBar"></div>
 
   <div class="schedule" id="schedule"></div>
 </div>
@@ -423,6 +619,111 @@ body {
 
 <script>
 (function() {
+  // ── Theme system ──────────────────────────────────────────────
+  const THEMES = {
+    galaxy: {
+      "--bg": "#0b0d1a",
+      "--text": "#e0e0e0",
+      "--accent": "#7b5ea7",
+      "--accent-hover": "#9b7ec8",
+      "--surface": "#12142a",
+      "--surface-hover": "#1a1d3a",
+      "--panel": "#090b18",
+      "--border": "#252848",
+      "--muted": "#6868a0",
+      "--card-blue": "#4361ee",
+      "--card-green": "#00b894",
+      "--card-orange": "#fdcb6e",
+      "--card-red": "#e17055",
+      "--input-bg": "#080a15",
+      "--modal-overlay": "rgba(0,0,0,0.7)",
+      "--cancel-bg": "#252848",
+      "--cancel-text": "#6868a0"
+    },
+    dune: {
+      "--bg": "#1a1510",
+      "--text": "#e8dcc8",
+      "--accent": "#c8956c",
+      "--accent-hover": "#d4a87a",
+      "--surface": "#2a2318",
+      "--surface-hover": "#3a3020",
+      "--panel": "#151008",
+      "--border": "#3d3425",
+      "--muted": "#8a7a60",
+      "--card-blue": "#c8956c",
+      "--card-green": "#8fa858",
+      "--card-orange": "#d4a040",
+      "--card-red": "#c85a4a",
+      "--input-bg": "#100c05",
+      "--modal-overlay": "rgba(0,0,0,0.6)",
+      "--cancel-bg": "#3d3425",
+      "--cancel-text": "#8a7a60"
+    },
+    "blade-runner": {
+      "--bg": "#0a0a12",
+      "--text": "#c0d0d0",
+      "--accent": "#e84393",
+      "--accent-hover": "#fd79a8",
+      "--surface": "#111118",
+      "--surface-hover": "#1a1a28",
+      "--panel": "#08080f",
+      "--border": "#2a1a2e",
+      "--muted": "#5a6868",
+      "--card-blue": "#00cec9",
+      "--card-green": "#00b894",
+      "--card-orange": "#fdcb6e",
+      "--card-red": "#e84393",
+      "--input-bg": "#060610",
+      "--modal-overlay": "rgba(0,0,0,0.75)",
+      "--cancel-bg": "#2a1a2e",
+      "--cancel-text": "#5a6868"
+    },
+    tron: {
+      "--bg": "#050510",
+      "--text": "#d0f0f0",
+      "--accent": "#00ffff",
+      "--accent-hover": "#66ffff",
+      "--surface": "#0a0a1a",
+      "--surface-hover": "#101025",
+      "--panel": "#040410",
+      "--border": "#0c3a3a",
+      "--muted": "#4a8a8a",
+      "--card-blue": "#00ffff",
+      "--card-green": "#00e68a",
+      "--card-orange": "#ffaa00",
+      "--card-red": "#ff4444",
+      "--input-bg": "#030308",
+      "--modal-overlay": "rgba(0,0,0,0.8)",
+      "--cancel-bg": "#0c3a3a",
+      "--cancel-text": "#4a8a8a"
+    }
+  };
+
+  function applyTheme(name) {
+    const theme = THEMES[name];
+    if (!theme) return;
+    document.body.dataset.theme = name;
+    for (const [prop, value] of Object.entries(theme)) {
+      document.body.style.setProperty(prop, value);
+    }
+    document.querySelectorAll(".theme-btn").forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.theme === name);
+    });
+    localStorage.setItem("dayplanner_theme", name);
+  }
+
+  // Apply saved theme immediately (before render)
+  applyTheme(localStorage.getItem("dayplanner_theme") || "galaxy");
+
+  // Theme button listeners
+  document.querySelectorAll(".theme-btn").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      applyTheme(this.dataset.theme);
+    });
+  });
+
+  // ── Day Planner app ──────────────────────────────────────────
   const START_HOUR = 6;
   const END_HOUR = 23;
   const STORAGE_PREFIX = "dayplanner_";
@@ -717,6 +1018,116 @@ body {
   // Update time indicator every minute
   setInterval(updateTimeIndicator, 60000);
 
+  // ── Market data & weather tiles ───────────────────────────────
+  let weatherLocation = localStorage.getItem("dayplanner_weather_loc") || "Auckland";
+
+  async function loadInfoBar() {
+    const bar = document.getElementById("infoBar");
+    bar.innerHTML = "";
+
+    // Fetch market quotes and weather in parallel
+    const [quotesRes, weatherRes] = await Promise.allSettled([
+      fetch("/api/quotes").then(r => r.ok ? r.json() : null),
+      fetch("/api/weather?location=" + encodeURIComponent(weatherLocation)).then(r => r.ok ? r.json() : null)
+    ]);
+
+    const quotes = quotesRes.status === "fulfilled" ? quotesRes.value : null;
+    const weather = weatherRes.status === "fulfilled" ? weatherRes.value : null;
+
+    // Render ticker tiles
+    if (quotes) {
+      for (const [name, info] of Object.entries(quotes)) {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+
+        const label = document.createElement("span");
+        label.className = "ticker-name";
+        label.textContent = name;
+
+        const pct = document.createElement("span");
+        if (info.change_pct !== null) {
+          const val = info.change_pct;
+          const sign = val >= 0 ? "+" : "";
+          pct.textContent = sign + val.toFixed(2) + "%";
+          pct.className = "ticker-pct " + (val > 0 ? "positive" : val < 0 ? "negative" : "neutral");
+        } else {
+          pct.textContent = "\u2014";
+          pct.className = "ticker-pct neutral";
+        }
+
+        tile.appendChild(label);
+        tile.appendChild(pct);
+        bar.appendChild(tile);
+      }
+    }
+
+    // Render weather tile
+    const wTile = document.createElement("div");
+    wTile.className = "weather-tile";
+
+    const wLoc = document.createElement("span");
+    wLoc.className = "weather-loc";
+    wLoc.textContent = weather ? weather.location : weatherLocation;
+
+    const wTemp = document.createElement("span");
+    wTemp.className = "weather-temp";
+    wTemp.textContent = weather && weather.temp_c !== null ? weather.temp_c + "\u00B0C" : "\u2014";
+
+    const wDesc = document.createElement("span");
+    wDesc.className = "weather-desc";
+    wDesc.textContent = weather ? weather.desc : "";
+
+    // Edit overlay
+    const editDiv = document.createElement("div");
+    editDiv.className = "weather-edit";
+    const editInput = document.createElement("input");
+    editInput.type = "text";
+    editInput.value = weatherLocation;
+    editInput.placeholder = "City name";
+    editDiv.appendChild(editInput);
+
+    wTile.appendChild(wLoc);
+    wTile.appendChild(wTemp);
+    wTile.appendChild(wDesc);
+    wTile.appendChild(editDiv);
+    bar.appendChild(wTile);
+
+    // Click to edit location
+    wTile.addEventListener("click", function(e) {
+      if (editDiv.classList.contains("active")) return;
+      editDiv.classList.add("active");
+      editInput.value = weatherLocation;
+      editInput.focus();
+      editInput.select();
+    });
+
+    editInput.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        const val = editInput.value.trim();
+        if (val) {
+          weatherLocation = val;
+          localStorage.setItem("dayplanner_weather_loc", val);
+        }
+        editDiv.classList.remove("active");
+        loadInfoBar();
+      }
+      if (e.key === "Escape") {
+        editDiv.classList.remove("active");
+      }
+    });
+
+    editInput.addEventListener("blur", function() {
+      editDiv.classList.remove("active");
+    });
+
+    editInput.addEventListener("click", function(e) {
+      e.stopPropagation();
+    });
+  }
+
+  loadInfoBar();
+  setInterval(loadInfoBar, 120000);
+
   // One-time migration: move localStorage data to server, then clean up
   async function migrateLocalStorage() {
     if (localStorage.getItem("dayplanner_migrated_to_server")) return;
@@ -724,7 +1135,7 @@ body {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k.startsWith(STORAGE_PREFIX) && !k.includes("migrated")) keys.push(k);
+      if (k.startsWith(STORAGE_PREFIX) && !k.includes("migrated") && !k.includes("theme")) keys.push(k);
     }
 
     for (const k of keys) {
